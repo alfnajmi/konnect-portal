@@ -60,9 +60,14 @@ export default class PortalV2ApiService {
 
     this.client = axios.create({
       baseURL: this.baseURL,
-      withCredentials: false,
+      // Always include credentials for portal API requests. For public portals this is harmless,
+      // and for authenticated/private portals it prevents silent unauthenticated catalog calls.
+      withCredentials: true,
       headers: {
-        accept: 'application/json'
+        accept: 'application/json',
+        // Avoid conditional cache responses (304) from leaving the catalog with stale/empty data.
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache'
       }
     })
 

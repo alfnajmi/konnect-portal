@@ -89,8 +89,56 @@ async function fetchProduct () {
 
     productStore.setProduct(productWithVersion)
   } catch (err) {
-    productStore.setProduct(null)
+    const isCoreSource = route.query.source === 'core'
 
+    if (isCoreSource && err.response?.status === 404) {
+      try {
+        const coreRes = await fetch(`/_core/api/v3/apis/${encodeURIComponent(id)}`, {
+          credentials: 'include'
+        })
+
+        if (!coreRes.ok) {
+          throw new Error(`Core API fetch failed with status ${coreRes.status}`)
+        }
+
+        const coreApi = await coreRes.json() as {
+          id: string;
+          name: string;
+          description?: string;
+          version?: string;
+          created_at?: string;
+          updated_at?: string;
+          current_version_summary?: { id: string } | null;
+        }
+        const now = new Date().toISOString()
+        const syntheticVersionId = coreApi.current_version_summary?.id || route.params.product_version as string
+
+        productStore.setProduct({
+          id: coreApi.id,
+          name: coreApi.name,
+          description: coreApi.description || '',
+          version_count: syntheticVersionId ? 1 : 0,
+          document_count: 0,
+          versions: syntheticVersionId
+            ? [{
+                id: syntheticVersionId,
+                name: coreApi.version || 'v1',
+                created_at: coreApi.updated_at || coreApi.created_at || now,
+                deprecated: false,
+                registration_configs: []
+              }]
+            : []
+        } as unknown as ProductWithVersions)
+
+        productError.value = null
+
+        return
+      } catch (coreErr) {
+        console.error(coreErr)
+      }
+    }
+
+    productStore.setProduct(null)
     console.error(err)
 
     if (err.response?.status === 404) {

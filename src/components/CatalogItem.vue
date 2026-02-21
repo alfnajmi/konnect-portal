@@ -10,7 +10,7 @@
       <div v-else>
         <a
           v-if="cacheBustSpecLinks"
-          :href="`/spec/${product.id}`"
+          :href="router.resolve(specRoute)?.path"
         >
           <p class="products-card-title truncate">
             {{ product.title }}
@@ -18,7 +18,7 @@
         </a>
         <router-link
           v-else
-          :to="`/spec/${product.id}`"
+          :to="specRoute"
         >
           <p class="products-card-title truncate">
             {{ product.title }}
@@ -85,7 +85,7 @@
             <template v-else>
               <a
                 v-if="cacheBustSpecLinks"
-                :href="router.resolve({ name: 'spec', params: { product: product.id } })?.path"
+                :href="router.resolve(specRoute)?.path"
                 class="link"
               >
                 {{ helpText.specificationLink }}
@@ -98,7 +98,7 @@
               </a>
               <router-link
                 v-else
-                :to="{ name: 'spec', params: { product: product.id } }"
+                :to="specRoute"
                 class="link"
               >
                 {{ helpText.specificationLink }}
@@ -180,6 +180,16 @@ export default {
     }
   },
   computed: {
+    specRoute () {
+      return {
+        name: 'spec',
+        params: {
+          product: this.product.id,
+          product_version: this.product.latestVersion?.id
+        },
+        query: this.product.isCoreApi ? { source: 'core' } : undefined
+      }
+    },
     version () {
       return this.product.latestVersion
     },

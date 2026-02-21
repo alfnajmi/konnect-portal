@@ -421,51 +421,107 @@ export default defineComponent({
     async function fetchSpec (version: string) {
       loading.value = true
 
-      return await portalApiV2.value.service.versionsApi.getProductVersionSpec({
-        productId: $route.params.product as string,
-        productVersionId: version
-      })
-        .then(async res => {
-          // no content
-          if (res.status === 204) {
-            res.data = {} as ProductVersionSpecDocument
-
-            return res
-          }
-
-          specContents.value = res.data.content
-
-          let parsedObject: any
-          const parseErrors = []
-
-          for (const specType of specTypes) {
-            try {
-              parsedObject = specType.parser(specContents.value)
-              if (parsedObject) {
-                specExt.value = specType.ext
-                break
-              }
-            } catch (err) {
-              parseErrors.push(err)
-            }
-          }
-
-          if (!parsedObject) {
-            console.error(['Failed to parse spec', ...parseErrors].join(', '))
-
-            return res
-          }
-
-          res.data = parsedObject
+      const tryParseSpecContent = async (res: any) => {
+        // no content
+        if (res.status === 204) {
+          res.data = {} as ProductVersionSpecDocument
 
           return res
-        })
-        .catch(e => {
-          return e.response
-        })
-        .finally(() => {
-          loading.value = false
-        })
+        }
+
+        specContents.value = res.data.content
+
+        let parsedObject: any
+        const parseErrors = []
+
+        for (const specType of specTypes) {
+          try {
+            parsedObject = specType.parser(specContents.value)
+            if (parsedObject) {
+              specExt.value = specType.ext
+              break
+            }
+          } catch (err) {
+            parseErrors.push(err)
+          }
+        }
+
+        if (!parsedObject) {
+          console.error(['Failed to parse spec', ...parseErrors].join(', '))
+
+          return res
+        }
+
+        res.data = parsedObject
+
+        return res
+      }
+
+      const fetchCoreSpec = async (productId: string, specificationId: string) => {
+        const endpoints = [
+          `/_core/api/v3/apis/${encodeURIComponent(productId)}/specifications/${encodeURIComponent(specificationId)}`,
+          `/_core/api/v3/specifications/${encodeURIComponent(specificationId)}`
+        ]
+
+        for (const endpoint of endpoints) {
+          const coreRes = await fetch(endpoint, {
+            credentials: 'include',
+            headers: {
+              accept: 'application/json, text/yaml, text/plain, */*'
+            }
+          })
+
+          if (!coreRes.ok) {
+            continue
+          }
+
+          if (coreRes.status === 204) {
+            return { status: 204, data: {} }
+          }
+
+          const contentType = coreRes.headers.get('content-type') || ''
+          let payload: any
+
+          if (contentType.includes('application/json')) {
+            payload = await coreRes.json()
+          } else {
+            payload = await coreRes.text()
+          }
+
+          const content = typeof payload === 'string'
+            ? payload
+            : typeof payload?.content === 'string'
+              ? payload.content
+              : JSON.stringify(payload, null, 2)
+
+          return {
+            status: 200,
+            data: {
+              content
+            }
+          }
+        }
+
+        return { status: 404, data: {} }
+      }
+
+      try {
+        let res: any = await portalApiV2.value.service.versionsApi.getProductVersionSpec({
+          productId: $route.params.product as string,
+          productVersionId: version
+        }).catch(e => e.response)
+
+        if ((res?.status !== 200 && res?.status !== 204) || $route.query.source === 'core') {
+          const coreRes = await fetchCoreSpec($route.params.product as string, version)
+          if (coreRes.status === 200 || coreRes.status === 204) {
+            res = coreRes
+          }
+        }
+
+        return await tryParseSpecContent(res)
+      } finally {
+        loading.value = false
+      }
     }
 
     async function loadSwagger () {

@@ -64,6 +64,15 @@ export default defineComponent({
   components: { Catalog },
 
   setup () {
+    type CoreApiEntity = {
+      id: string;
+      name: string;
+      version?: string;
+      description?: string;
+      specifications?: Array<{ id: string; type: string }>;
+      current_version_summary?: { id: string; spec?: { type?: string } } | null;
+    }
+
     const catalog_cover_style = ref<{backgroundImage:string}>({ backgroundImage: '' })
     const welcome_message = ref('')
     const primary_header = ref('')
@@ -132,7 +141,46 @@ export default defineComponent({
             pageSize: cardsPerPage.value,
             join: 'versions'
           })
+
           const { data: sources, meta } = portalEntities
+
+          if (!sources?.length) {
+            const pageSize = cardsPerPage.value
+            const pageNumber = catalogPageNumber.value
+            const query = new URLSearchParams({
+              'page[size]': String(pageSize),
+              'page[number]': String(pageNumber),
+              sort: 'name asc'
+            })
+
+            const apiNameSearch = searchString.value.trim()
+            if (apiNameSearch) {
+              query.set('filter[name][contains]', apiNameSearch)
+            }
+
+            const coreResponse = await fetch(`/_core/api/v3/apis?${query.toString()}`, {
+              credentials: 'include'
+            })
+            if (!coreResponse.ok) {
+              throw new Error(`Core API search failed with status ${coreResponse.status}`)
+            }
+
+            const corePayload = await coreResponse.json() as { data: CoreApiEntity[]; meta?: { page?: { total?: number } } }
+            catalogItems.value = corePayload.data.map((api) => ({
+              id: api.id,
+              title: api.name,
+              isCoreApi: true,
+              latestVersion: api.version ? { id: api.current_version_summary?.id || '', name: api.version } : null,
+              showSpecLink: Boolean(api.specifications?.length || api.current_version_summary?.spec?.type),
+              description: api.description || '',
+              documentCount: 0,
+              versionCount: api.version ? 1 : 0,
+              publicLabels: []
+            }))
+            totalCount.value = corePayload.meta?.page?.total || 0
+
+            return
+          }
 
           catalogItems.value = await Promise.all(sources.map(async ({ source }) => {
             let showSpecLink = false

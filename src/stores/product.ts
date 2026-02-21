@@ -10,6 +10,7 @@ export interface CatalogItemModel {
   id: string;
   title: string;
   showSpecLink: boolean;
+  isCoreApi?: boolean;
   latestVersion: null|{ name: string; id: string}
   description: string;
   documentCount: number;

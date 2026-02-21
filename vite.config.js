@@ -12,15 +12,23 @@ function mutateCookieAttributes (proxy) {
   proxy.on('proxyRes', function (proxyRes, req, res) {
     if (proxyRes.headers['set-cookie']) {
       proxyRes.headers['set-cookie'] = (proxyRes.headers['set-cookie']).map(h => {
-        return h.replace(/Domain=.*;/, 'Domain=localhost; Secure;')
+        // Dev on http://localhost cannot use Secure cookies.
+        // Rewrite cookie attributes so auth/session cookies can be stored and sent locally.
+        let cookie = h.replace(/Domain=[^;]+;?/i, 'Domain=localhost;')
+
+        if ((req.headers.host || '').includes('localhost')) {
+          cookie = cookie
+            .replace(/;\s*Secure/ig, '')
+            .replace(/SameSite=None/ig, 'SameSite=Lax')
+        }
+
+        return cookie
       })
     }
   })
 }
 
-function setHostHeader (proxy) {
-  const host = new URL(process.env.VITE_PORTAL_API_URL).hostname
-
+function setHostHeader (proxy, host) {
   proxy.on('proxyReq', function (proxyRes) {
     proxyRes.setHeader('host', host)
   })
@@ -61,6 +69,9 @@ export default ({ mode }) => {
   if (!portalApiUrl.endsWith('/')) {
     portalApiUrl += '/'
   }
+  const parsedPortalUrl = new URL(portalApiUrl)
+  parsedPortalUrl.hostname = parsedPortalUrl.hostname.replace(/\.$/, '')
+  portalApiUrl = parsedPortalUrl.toString()
 
   // Sets VITE_INDEX_API_URL which is templated in index.html if PREVIEW_LOCAL=true
   process.env.VITE_INDEX_API_URL = mode === 'development' || process.env.PREVIEW_LOCAL === 'true' ? '/' : portalApiUrl
@@ -74,12 +85,12 @@ export default ({ mode }) => {
   }
 
   const proxy = {
-    '^/api': {
+    '^/(api|_core)': {
       target: portalApiUrl,
       changeOrigin: true,
       configure: (proxy) => {
         mutateCookieAttributes(proxy)
-        setHostHeader(proxy)
+        setHostHeader(proxy, parsedPortalUrl.hostname)
       }
     }
   }
