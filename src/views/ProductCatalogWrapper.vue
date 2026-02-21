@@ -166,6 +166,7 @@ export default defineComponent({
             }
 
             const corePayload = await coreResponse.json() as { data: CoreApiEntity[]; meta?: { page?: { total?: number } } }
+
             catalogItems.value = corePayload.data.map((api) => ({
               id: api.id,
               title: api.name,
