@@ -113,6 +113,77 @@ Build production bundle '_(dist/)_' for deployment with
 yarn build
 ```
 
+## Local Konnect Fix Notes
+
+This section documents the fixes applied to make this fork work reliably with a Konnect Dev Portal in local development.
+
+### Main issues observed
+
+* Local portal showed empty products while cloud portal showed APIs.
+* Intermittent `401 Unauthorized` due to local cookie/session behavior.
+* Hostname/certificate mismatch when using non-matching portal domains.
+* Catalog and spec data came from mixed API families (`/api/v2` vs `/_core/api/v3`).
+* Clicking a product sometimes navigated to `404` because route data was fetched from a different backend API model.
+
+### What was fixed
+
+* Updated Vite proxy to support both `/api/*` and `/_core/*`.
+* Improved local cookie rewriting for `localhost` so authenticated requests are usable in dev.
+* Normalized target hostname handling in proxy setup.
+* Added catalog fallback:
+  * First try `/api/v2/search/product-catalog`
+  * If empty, fallback to `/_core/api/v3/apis`
+* Added core-source routing metadata from catalog cards (`source=core`).
+* Updated spec click route to include `product_version` when available.
+* Added product/spec fallback logic for core-sourced APIs to prevent `404` on detail page.
+
+### Runtime flow (current behavior)
+
+```text
+Local Browser (localhost:5173)
+        |
+        v
+     Vite Proxy
+   /api + /_core
+        |
+        v
+Konnect Portal Domain
+  - /api/v2/...         (legacy portal endpoints)
+  - /_core/api/v3/...   (newer portal endpoints)
+        |
+        v
+Catalog + Spec UI Render
+```
+
+### Request fallback drawing
+
+```text
+[Catalog Page Load]
+       |
+       v
+GET /api/v2/search/product-catalog
+       |
+       +--> has data ----> map to cards ----> click -> /spec/:product/:version
+       |
+       +--> empty --------> GET /_core/api/v3/apis
+                              |
+                              +--> map to cards (source=core)
+                              +--> click -> /spec/:product/:version?source=core
+                                                |
+                                                +--> v2 product/spec fails?
+                                                       |
+                                                       +--> fallback to _core api/spec endpoints
+```
+
+### Quick verification checklist
+
+* `.env` uses the correct portal host and trailing slash.
+* Login works on local portal (`/api/v2/developer/me` returns `200` in browser console).
+* Catalog endpoint returns data from either:
+  * `/api/v2/search/product-catalog`, or
+  * `/_core/api/v3/apis`
+* Clicking a card opens spec page without redirecting to `/404`.
+
 ## Contributing
 
 Please take the time to become familiar with our standards outlined below.

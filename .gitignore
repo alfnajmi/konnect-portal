@@ -17,6 +17,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Test/build artifacts
+coverage/
+.nyc_output/
+bundle-analyzer/
+.cache/
+
 # Editor directories and files
 .idea
 .vscode
